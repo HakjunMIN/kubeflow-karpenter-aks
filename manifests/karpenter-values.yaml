@@ -1,0 +1,50 @@
+
+replicas: 1 # for better debugging experience
+controller:
+  env:
+    - name: FEATURE_GATES
+      value: Drift=true
+    - name: LEADER_ELECT # disable leader election for better debugging / troubleshooting experience
+      value: "false"
+    # options
+    - name: CLUSTER_NAME
+      # disable HTTP/2 to reduce ARM throttling on large-scale tests;
+      # with this in place write (and read) QPS can be increased too
+      #- name: GODEBUG
+      #  value: http2client=0
+
+      value: kubeflowcl
+    - name: CLUSTER_ENDPOINT
+      value: https://kubeflowcl-kubeflow-12f558-kdgeupwh.hcp.japaneast.azmk8s.io:443
+    - name: KUBELET_BOOTSTRAP_TOKEN
+      value: f95v5t.l2uuw0o5lwab4gw3
+    - name: SSH_PUBLIC_KEY
+      value: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDG2r9LnkBfK0lRvUs3yk7iC7x1x8KVJvLtXgZU8Hip3baR+NdpTqxyTrwOG0pjDICOc3gVfJHvNI27nJn662I7ffl6o1cP5rrG4GBGxSTC5gfaIh8pQlfaY1lsVQiFEYgKntIbVNqtNvqXP0TeKq6rIW8OT5VutQpZI+5R7miW0Xhgz+WIqzdTICNh8K1yU79cZacnJTQGuHaWq9MnLxm5DbULklha4Ra+l1q7mgo0hqA5FwZiQXpNlpRXkPmUwpGpox3v6+Tyz4fJZpP8OK6fulJ5OJkT7ql9msTEs2uBLqMxzB9R+BFD5/NHxZ7w9WYSCMYkRQVVKbCkUX7Y97sfT9s5qO0utOepLkbCq5MHvHbLsH0lMjERe0XjepQ6XzRI3oY01wjcvpuHZHrDq5CmKvnPxFwEJYz7FUkPsgf4e6JwiuWuuyE1ds7efvLIxmUUHczD+hDeH6a7cR1Gu2weNEbdJN5gYPeb3E5HcCq+FIb3fM4TX9wUmwaLE85Tf2s= andy@andrewmin-sl3 azureuser"
+    - name: NETWORK_PLUGIN
+      value: "azure"
+    - name: NETWORK_POLICY
+      value: ""
+    - name: VNET_SUBNET_ID
+      value: /subscriptions/12f55838-824f-4f06-a39a-e452ff7fdb7a/resourceGroups/MC_kubeflow_kubeflowcl_japaneast/providers/Microsoft.Network/virtualNetworks/aks-vnet-15002479/subnets/aks-subnet
+    - name: NODE_IDENTITIES
+      value: /subscriptions/12f55838-824f-4f06-a39a-e452ff7fdb7a/resourcegroups/MC_kubeflow_kubeflowcl_japaneast/providers/Microsoft.ManagedIdentity/userAssignedIdentities/kubeflowcl-agentpool
+    # Azure client settings
+    - name: ARM_SUBSCRIPTION_ID
+      value: 12f55838-824f-4f06-a39a-e452ff7fdb7a
+    - name: LOCATION
+      value: japaneast
+    # settings for managed workload ideneity
+    - name: ARM_USE_CREDENTIAL_FROM_ENVIRONMENT
+      value: "true"
+    - name: ARM_USE_MANAGED_IDENTITY_EXTENSION
+      value: "false"
+    - name: ARM_USER_ASSIGNED_IDENTITY_ID
+      value: ""
+    - name: AZURE_NODE_RESOURCE_GROUP
+      value: MC_kubeflow_kubeflowcl_japaneast
+serviceAccount:
+  name: karpenter-sa
+  annotations:
+    azure.workload.identity/client-id: 15c8a98e-dd9c-4908-857c-509d864d93a5
+podLabels:
+  azure.workload.identity/use: "true"
