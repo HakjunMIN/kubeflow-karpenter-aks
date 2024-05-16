@@ -235,7 +235,7 @@ kind: AKSNodeClass
 metadata:
   name: gpu-nc
   annotations:
-    kubernetes.io/description: "General purpose AKSNodeClass for running Ubuntu2204 nodes"
+    kubernetes.io/description: "General GPU AKSNodeClass for running Ubuntu2204 nodes"
 spec:
   imageFamily: Ubuntu2204
 ```
