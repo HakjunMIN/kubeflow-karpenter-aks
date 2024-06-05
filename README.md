@@ -26,7 +26,7 @@ KMSI_JSON=$(az identity create --name karpentermsi --resource-group "${RG}" --lo
 
 az aks create \
   --name "${CLUSTER_NAME}" --resource-group "${RG}" \
-  --node-count 5 --generate-ssh-keys \
+  --node-count 7 --generate-ssh-keys \
   --network-plugin azure --network-plugin-mode overlay --network-dataplane cilium \
   --enable-managed-identity \
   --enable-oidc-issuer --enable-workload-identity 
@@ -338,8 +338,12 @@ kubectl apply -f tls/certificate.yaml
 
 * 최종적으로 certifate변경으로 인한 전체 설정 재반영 
 ```bash
-kustomize build tls | kubectl apply -f -
+while ! kustomize build tls | kubectl apply -f -; do echo "Retrying to apply resources"; sleep 10; done
 ```
+
+> [!Important]
+> error발생 시 반복적으로 kustomize실행 
+
 
 ## (옵션) Jupyter notebook GPU Toleration설정
 
@@ -387,11 +391,172 @@ print(c)
      
 ```
 
+## authservice
+
+https://github.com/arrikto/oidc-authservice/issues/117
+
+```yaml
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: authservice-web
+  namespace: istio-system
+spec:
+  gateways:
+    - kubeflow/kubeflow-gateway
+  hosts:
+    - '*'
+  http:
+    - match:
+        - uri:
+            prefix: "/authservice/login/oidc"
+      rewrite:
+        uri: "/"
+      route:
+        - destination:
+            host: authservice.istio-system.svc.cluster.local
+            port:
+              number: 8080
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: authservice-logout
+  namespace: istio-system
+spec:
+  gateways:
+    - kubeflow/kubeflow-gateway
+  hosts:
+    - '*'
+  http:
+    - match:
+        - uri:
+            prefix: /logout
+      rewrite:
+        uri: /authservice/logout
+      route:
+        - destination:
+            host: authservice.istio-system.svc.cluster.local
+            port:
+              number: 8080          
+              
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: authservice-web
+  namespace: istio-system
+spec:
+  gateways:
+    - kubeflow/kubeflow-gateway
+  hosts:
+    - '*'
+  http:
+    - match:
+        - uri:
+            prefix: /authservice/
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: authservice.istio-system.svc.cluster.local
+            port:
+              number: 8082
+
+
+```
+
+## OIDC 연계 
+
+Auth를 위해 내장되어 있는 DEX IDP대신 외부 IDP와 연계를 위해 OIDC를 이용해 인증을 연동할 수 있음. OIDC를 지원하는 IDP는 아래 Azure EntraID와 유사한 방식으로 연동 가능. 
+
+### oidc-authservice 설정 변경
+
+[OIDC authservice params](manifests/common/oidc-client/oidc-authservice/base/params.env)
+
+```
+OIDC_PROVIDER=https://login.microsoftonline.com/<Tenant-ID>/v2.0
+OIDC_AUTH_URL=https://login.microsoftonline.com/<Tenant-ID>/oauth2/v2.0/authorize
+OIDC_SCOPES=profile,email
+REDIRECT_URL=<kubeflow https domain>/authservice/oidc/callback
+AUTHSERVICE_URL_PREFIX=/authservice/
+SKIP_AUTH_URLS=/dex
+AFTER_LOGOUT_URL=
+USERID_HEADER=kubeflow-userid
+USERID_PREFIX=
+USERID_CLAIM=email
+PORT="8080"
+STORE_PATH=/var/lib/authservice/data.db
+
+```
+
+### OIDC 연동 앱이 사용할 Service principal 생성
+
+SP생성 후 appID와 Password를 노트
+
+```bash
+
+export appname="kubeauth"
+az ad sp create-for-rbac --name $appname --skip-assignment
+
+{
+  "appId": "29bc9d7e-b741-4310-a9fa-b744436d20c5",
+  "displayName": "kubeauth",
+  "password": "...56SdkY",
+  "tenant": "....02f4f"
+}
+```
+
+user정보 Permision할당 및 관리자 정보제공 동의
+
+```bash
+az ad app permission add --id <app-id> --api 00000003-0000-0000-c000-000000000000 --api-permissions 64a6cdd6-aab1-4aaf-94b8-3cc8405e90d0=Scope e1fe6dd8-ba31-4d61-89e7-88639da4683d=Scope 14dad69e-099b-42c9-810b-d002981feec1=Scope
+
+az ad app permission admin-consent --id <app-id> 
+```
+
+Azure Portal > App Registrations > 생성된 SP > Manage > Authentication > Add a platform > Web Redirect URL에 https://<kubeflow domain>/authservice/oidc/callback"
+
+<!-- TO-DO 아래 확인중
+```bash
+az ad app update --id <app-id> --set web.redirectUris="https://kubeflow.andrewmin.net/authservice/oidc/callback"
+``` -->
+
+### Service Principal ID 및 secret 할당
+
+[OIDC sercret params](manifests/common/oidc-client/oidc-authservice/base/secret_params.env)
+
+```
+CLIENT_ID=<APP ID>
+CLIENT_SECRET=<Secret value>
+```
+
+(선택) 새로운 사용자 로그인 시 자동으로 프로필 생성되도록 변경
+[Central dashboard params](manifests/apps/centraldashboard/upstream/base/params.env)
+
+### oidc-authservice manifest 확인 
+
+oidc-authservice 오류 Patch된 버전 사용하도록 이미지 변경
+[oidc-authservice statefulset](manifests/common/oidc-client/oidc-authservice/base/statefulset.yaml)
+
+```yaml
+...
+image: gcr.io/arrikto/oidc-authservice:0c4ea9a
+...
+```
+
+## TO-DO
+
+* Integrate Azure mySQL 
+* Private Link
+* Terraform provisioning 
+
 ## Reference
 https://github.com/Azure/karpenter-provider-azure
 https://github.com/azure/kubeflow-aks
 https://min.io/product/multicloud-azure-kubernetes-service
-https://v1-5-branch.kubeflow.org/docs/distributions/azure/authentication-oidc/
+(Obsolete)https://v1-7-branch.kubeflow.org/docs/distributions/azure/authentication-oidc/
 
 
 
