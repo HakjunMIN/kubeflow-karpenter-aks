@@ -1,5 +1,7 @@
 # 외부 망 Vnet 분리 아키텍처
 
+![appgw-istio](./doc/appgw-istio.png)
+
 ## Application Gateway 생성
 
 ## Kubeflow Istio Ingress GW 내부IP변경 (ClusterIP가 아님)
