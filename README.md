@@ -29,7 +29,8 @@ az aks create \
   --node-count 7 --generate-ssh-keys \
   --network-plugin azure --network-plugin-mode overlay --network-dataplane cilium \
   --enable-managed-identity \
-  --enable-oidc-issuer --enable-workload-identity 
+  --enable-oidc-issuer --enable-workload-identity --node-provisioning-mode Auto 
+  
 
 ```
 
@@ -47,7 +48,7 @@ az identity federated-credential create --name KARPENTER_FID --identity-name kar
 KARPENTER_USER_ASSIGNED_CLIENT_ID=$(jq -r '.principalId' <<< "$KMSI_JSON")
 RG_MC=$(jq -r ".nodeResourceGroup" <<< "$AKS_JSON")
 RG_MC_RES=$(az group show --name "${RG_MC}" --query "id" -otsv)
-for role in "Virtual Machine Contributor" "Network Contributor" "Managed Identity Operator"; do
+for role in "Virtual Machine Contributor" "Network Contributor" "Managed Identity Operator" "Contributor"; do
   az role assignment create --assignee "${KARPENTER_USER_ASSIGNED_CLIENT_ID}" --scope "${RG_MC_RES}" --role "$role"
 done  
 
@@ -222,13 +223,16 @@ spec:
         - key: karpenter.sh/capacity-type
           operator: In
           values: ["on-demand"]
+        - key: karpenter.azure.com/sku-name
+          operator: In
+          values: ["Standard_NC24ads_A100_v4"] 
       nodeClassRef:
         name: gpu-nc
       taints:
         - key: nvidia.com/gpu
           value: "true"
           effect: NoSchedule
-
+        
 ---
 apiVersion: karpenter.azure.com/v1alpha2
 kind: AKSNodeClass
@@ -270,6 +274,11 @@ spec:
         value: "gpu"
         effect: "NoSchedule"
 ```
+
+> !Note
+> Node 프로비저닝이 잘 되지 않을 경우 https://github.com/Azure/karpenter-provider-azure/issues/247 참고
+> `az aks update -n <cluster> -g <rg>
+
 
 ## Kubeflow 설치
 
@@ -336,7 +345,14 @@ kubectl get svc istio-ingressgateway -n istio-system
 kubectl apply -f tls/certificate.yaml
 ```
 
-* 최종적으로 certifate변경으로 인한 전체 설정 재반영 
+#### 외부 인증서 사용시 
+
+```bash
+kubectl create secret tls istio-ingressgateway-certs --key ./privkey1.pem --cert ./fullchain1.pem -n istio-system
+```
+
+
+* 최종적으로 certifcate변경으로 인한 전체 설정 재반영 
 ```bash
 while ! kustomize build tls | kubectl apply -f -; do echo "Retrying to apply resources"; sleep 10; done
 ```
@@ -389,6 +405,32 @@ c = tf.matmul(a, b)
 
 print(c)
      
+```
+
+Or `nvidia-smi`로 GPU status확인
+
+```ipynb
+!nvidia-smi
+Mon Jul 29 07:13:38 2024       
++---------------------------------------------------------------------------------------+
+| NVIDIA-SMI 535.161.08             Driver Version: 535.161.08   CUDA Version: 12.2     |
+|-----------------------------------------+----------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |         Memory-Usage | GPU-Util  Compute M. |
+|                                         |                      |               MIG M. |
+|=========================================+======================+======================|
+|   0  NVIDIA A10-4Q                  On  | 00000002:00:00.0 Off |                    0 |
+| N/A   N/A    P0              N/A /  N/A |   2020MiB /  4096MiB |      0%      Default |
+|                                         |                      |             Disabled |
++-----------------------------------------+----------------------+----------------------+
+                                                                                         
++---------------------------------------------------------------------------------------+
+| Processes:                                                                            |
+|  GPU   GI   CI        PID   Type   Process name                            GPU Memory |
+|        ID   ID                                                             Usage      |
+|=======================================================================================|
++---------------------------------------------------------------------------------------+
+
 ```
 
 ## authservice
@@ -475,7 +517,7 @@ Auth를 위해 내장되어 있는 DEX IDP대신 외부 IDP와 연계를 위해 
 
 [OIDC authservice params](manifests/common/oidc-client/oidc-authservice/base/params.env)
 
-```
+```conf
 OIDC_PROVIDER=https://login.microsoftonline.com/<Tenant-ID>/v2.0
 OIDC_AUTH_URL=https://login.microsoftonline.com/<Tenant-ID>/oauth2/v2.0/authorize
 OIDC_SCOPES=profile,email

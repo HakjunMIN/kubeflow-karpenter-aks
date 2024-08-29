@@ -5,6 +5,7 @@ metadata:
 spec:
   accessModes:
   - ReadWriteOnce
+  storageClassName: azureblob-fuse-premium
   resources:
     requests:
       storage: 20Gi

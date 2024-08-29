@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
       - args:
-        - .dategateway
-        - azure
+        - server
+        - /data
         env:
         - name: MINIO_ACCESS_KEY
           valueFrom:
@@ -34,15 +34,15 @@ spec:
         name: minio
         ports:
         - containerPort: 9000
-        # volumeMounts:
-        # - mountPath: /data
-        #   name: data
-        #   subPath: minio
+        volumeMounts:
+        - mountPath: /data
+          name: data
+          subPath: minio
         resources:
           requests:
             cpu: 20m
             memory: 100Mi
-      # volumes:
-      # - name: data
-      #   persistentVolumeClaim:
-      #     claimName: minio-pvc
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: minio-pvc
