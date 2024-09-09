@@ -70,7 +70,18 @@ spec:
       containers:
       - args:
         - server  #here
-        - /data   #here, 기존 사용했던 MINIO_ACCESS_KEY, MINIO_SECRET_KEY 환경변수 삭제
+        - /data   #here, 
+        env: # 아래 정보도 반드시 필요
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: mlpipeline-minio-artifact
+              key: accesskey
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: mlpipeline-minio-artifact
+              key: secretkey
         image: gcr.io/ml-pipeline/minio:RELEASE.2019-08-14T20-37-41Z-license-compliance
         name: minio
         ports:
