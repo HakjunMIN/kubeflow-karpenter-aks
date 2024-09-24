@@ -588,6 +588,12 @@ image: gcr.io/arrikto/oidc-authservice:0c4ea9a
 ...
 ```
 
+## Additional documents
+
+* [Hub-Spoke Network topology](./seperate-vnet-architecure.md)
+* [Alternative solution for MinIO Deprecation](./minio-gw-deprecate.md)
+* [Image Caching PoC](./image-caching-harbor.md)
+
 ## TO-DO
 
 * Integrate Azure mySQL 
